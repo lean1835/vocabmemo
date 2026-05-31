@@ -2,19 +2,21 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "commonjs",
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "5.0",
     "baseUrl": "./",
     "paths": {
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"],
       "@config/*": ["src/common/config/*"]
     },
+    "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node", "bcrypt", "cookie-parser", "cors", "express", "jsonwebtoken"]
+    "types": ["node", "express", "cors", "cookie-parser", "bcrypt", "jsonwebtoken"]
   },
   "include": ["src/**/*"]
 }
