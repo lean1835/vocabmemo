@@ -91,11 +91,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ currentTab, ch
         <div onClick={() => navigate("/")} className="cursor-pointer">
           <LogoBrand size="sm" align="center" subTextContent="AI NOTEBOOK" />
         </div>
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
-          <div className="w-8 h-8 rounded-full bg-[#0056b3] text-white flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer">
-            {userInitials}
-          </div>
-        </Dropdown>
+        {/* Streak Badge - mobile top right */}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-sm select-none border transition-all ${
+          isStreakActive
+            ? "bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800/80"
+            : "bg-slate-50 dark:bg-slate-950/40 border-gray-200/60 dark:border-slate-900/60"
+        }`}>
+          <svg
+            className={`w-3.5 h-3.5 transition-colors ${
+              isStreakActive ? "text-[#ff9500] dark:text-[#ffb300]" : "text-slate-300 dark:text-slate-700"
+            }`}
+            viewBox="0 0 24 24"
+            fill={isStreakActive ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+          </svg>
+          <span className={`text-[10px] font-black tracking-tight leading-none transition-colors ${
+            isStreakActive ? "text-slate-800 dark:text-slate-200" : "text-slate-400 dark:text-slate-500"
+          }`}>
+            {streakCount} day
+          </span>
+        </div>
       </div>
 
       {/* MOBILE MENU DRAWER */}
@@ -300,8 +321,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ currentTab, ch
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-black relative pt-16 md:pt-0">
         
-        {/* Streak Badge Floating in Top Right Corner */}
-        <div className={`absolute top-6 right-8 flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm z-40 select-none border transition-all ${
+        {/* Streak Badge Floating in Top Right Corner (Desktop only) */}
+        <div className={`hidden md:flex absolute top-6 right-8 items-center gap-2 px-3 py-1.5 rounded-full shadow-sm z-40 select-none border transition-all ${
           isStreakActive
             ? "bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800/80"
             : "bg-slate-50 dark:bg-slate-950/40 border-gray-200/60 dark:border-slate-900/60"
