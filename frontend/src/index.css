@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: "Inter", sans-serif;
+  }
+}
+
+/* Custom Premium UI classes */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .glass-card {
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Glow effects */
+.glow-purple {
+  box-shadow: 0 8px 30px rgba(124, 77, 255, 0.12);
+}
+
+.dark .glow-purple {
+  box-shadow: 0 8px 30px rgba(124, 77, 255, 0.05);
+}
+
+/* Custom Gradients */
+.bg-gradient-purple {
+  background: linear-gradient(135deg, #7c4dff 0%, #a855f7 100%);
+}
+
+.bg-gradient-dark {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.bg-gradient-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+/* Premium micro-interactions */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+}
+
+/* Custom Ant Design Table DNA */
+.custom-table .ant-table {
+  background: transparent !important;
+}
+
+.custom-table .ant-table-thead > tr > th {
+  background: rgba(124, 77, 255, 0.04) !important;
+  color: #7c4dff !important;
+  font-weight: 800 !important;
+  border-bottom: 1px solid rgba(124, 77, 255, 0.08) !important;
+}
+
+.dark .custom-table .ant-table-thead > tr > th {
+  background: rgba(15, 23, 42, 0.3) !important;
+  color: #b59cff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.custom-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03) !important;
+}
+
+.dark .custom-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: #cbd5e1 !important;
+}
+
+.custom-table .ant-table-row:hover > td {
+  background: rgba(124, 77, 255, 0.015) !important;
+}
+
+.dark .custom-table .ant-table-row:hover > td {
+  background: rgba(255, 255, 255, 0.01) !important;
+}
+
+/* Custom Ant Design tabs */
+.ant-tabs-nav-list {
+  background: rgba(124, 77, 255, 0.02) !important;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 77, 255, 0.05);
+}
+
+.dark .ant-tabs-nav-list {
+  background: rgba(15, 23, 42, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Smooth transition for theme switching */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* 3D Flip Card Styles */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.card-flip-container {
+  width: 100%;
+  height: 380px;
+  perspective: 1000px;
+}
+
+.card-flip-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.card-flip-front,
+.card-flip-back {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-flip-back {
+  transform: rotateY(180deg);
+}
+
+.card-flipped {
+  transform: rotateY(180deg);
+}
+
+/* Streak Fire Animation Overlay */
+@keyframes flamePulsate {
+  0% { transform: scale(0.95); filter: drop-shadow(0 0 20px rgba(255, 149, 0, 0.6)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 45px rgba(255, 85, 0, 0.95)); }
+  100% { transform: scale(0.95); filter: drop-shadow(0 0 20px rgba(255, 149, 0, 0.6)); }
+}
+
+@keyframes flameRise {
+  0% { transform: translateY(10px) scaleY(0.9); opacity: 0.9; }
+  50% { transform: translateY(-5px) scaleY(1.05); opacity: 1; }
+  100% { transform: translateY(10px) scaleY(0.9); opacity: 0.9; }
+}
+
+@keyframes streakPopIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-flame-pulsate {
+  animation: flamePulsate 1.8s infinite ease-in-out;
+}
+
+.animate-flame-rise {
+  animation: flameRise 0.6s infinite ease-in-out alternate;
+}
+
+.animate-streak-pop {
+  animation: streakPopIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.fire-glow {
+  background: radial-gradient(circle, rgba(255, 149, 0, 0.22) 0%, rgba(255, 69, 0, 0) 70%);
+}
+
+
