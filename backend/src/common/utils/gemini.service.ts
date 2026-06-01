@@ -222,7 +222,7 @@ BẮT BUỘC TRẢ VỀ DẠNG JSON TUÂN THỦ HOÀN TOÀN SCHEMA DƯỚI ĐÂY
         temperature: 0.1,
       }
     }, {
-      timeout: 7000 // Timeout 7 giây để tránh bị treo khi model bị chậm hoặc lỗi
+      timeout: 15000 // Tăng timeout lên 15 giây để tránh fallback non khi mạng bị lag nhẹ
     });
 
     const text = result.response.text();
