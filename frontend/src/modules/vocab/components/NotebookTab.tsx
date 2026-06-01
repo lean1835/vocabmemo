@@ -28,9 +28,6 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
   const [tagsVal, setTagsVal] = useState("");
   const [showAdvanceAdd, setShowAdvanceAdd] = useState(false);
   const [selectedHistoryVocab, setSelectedHistoryVocab] = useState<any | null>(null);
-  // Bridge flag: giữ loading card liên tục từ lúc submit cho đến khi AI xong
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   // Debounce keyword to prevent UI jitter on each keystroke
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword), 300);
@@ -43,37 +40,6 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
     limit: 100,
     keyword: debouncedKeyword || undefined
   });
-
-  // Xác định xem có bản ghi nào đang chờ phân tích AI hay không
-  const hasAnalyzing = useMemo(() => {
-    return vocabsData?.data?.some((v: any) => v.isAnalyzing) ?? false;
-  }, [vocabsData]);
-
-  // Track ID cụ thể của vocab vừa tạo để biết chính xác khi nào AI xong
-  const pendingVocabIdRef = useRef<string | null>(null);
-
-  // Polling: chạy khi isSubmitting (chờ API + chờ AI) hoặc khi có bản ghi đang phân tích
-  useEffect(() => {
-    if (isSubmitting || hasAnalyzing) {
-      const interval = setInterval(() => refetch(), 1500);
-      return () => clearInterval(interval);
-    }
-  }, [isSubmitting, hasAnalyzing, refetch]);
-
-  // Theo dõi đúng vocab cụ thể — chỉ thông báo khi ĐÚNG từ vừa tạo xong phân tích
-  useEffect(() => {
-    if (!pendingVocabIdRef.current || !vocabsData?.data) return;
-    const pendingVocab = vocabsData.data.find((v: any) => v._id === pendingVocabIdRef.current);
-    if (pendingVocab && !pendingVocab.isAnalyzing) {
-      notification.success({
-        message: "Lưu từ vựng thành công",
-        description: `Đã phân tích và lưu từ "${pendingVocab.correctedWord || pendingVocab.originalInput || 'từ mới'}".`,
-        placement: "topRight"
-      });
-      pendingVocabIdRef.current = null;
-      setIsSubmitting(false);
-    }
-  }, [vocabsData]);
 
   const [createVocab, { isLoading: isCreating }] = useCreateVocabMutation();
   const [deleteVocab] = useDeleteVocabMutation();
@@ -91,9 +57,6 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     return vocabsData.data.filter((v: any) => {
-      // Không hiển thị thẻ trên giao diện khi đang trong quá trình phân tích ngầm
-      if (v.isAnalyzing) return false;
-
       const d = new Date(v.createdAt);
       const vStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       return vStr === todayStr;
@@ -111,7 +74,6 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
     e.preventDefault();
     if (!inputVal.trim()) return;
 
-    setIsSubmitting(true); // Bật ngay khi submit để tránh nháy
     try {
       const tagsArray = tagsVal
         ? tagsVal.split(",").map((t: string) => t.trim()).filter(Boolean)
@@ -132,22 +94,17 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
         setTagsVal("");
         setShowAdvanceAdd(false);
 
-        // Lưu ID vocab vừa tạo để theo dõi đúng item khi AI xong
-        if (result.data?._id) {
-          pendingVocabIdRef.current = result.data._id;
-        } else {
-          // Fallback: không có ID thì dùng hasAnalyzing transition
-          setIsSubmitting(false);
-        }
+        notification.success({
+          message: "Lưu từ vựng thành công",
+          description: `Đã phân tích và lưu từ "${result.data?.correctedWord || result.data?.originalInput || 'từ mới'}".`,
+          placement: "topRight"
+        });
 
         if (result.streakUpdated && onStreakUpdated) {
           onStreakUpdated(result.streakCount);
         }
-      } else {
-        setIsSubmitting(false);
       }
     } catch (err: any) {
-      setIsSubmitting(false); // Xóa ngay nếu lỗi
       notification.error({
         message: "AI phân tích thất bại",
         description: err?.data?.message || "Vui lòng kiểm tra kết nối API Key.",
@@ -231,8 +188,8 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
           </p>
         </div>
 
-        {/* Main quick add bar (Replaced with inline Loading card when isSubmitting/isCreating is true or AI is still analyzing in background) */}
-        {(isSubmitting || isCreating || hasAnalyzing) ? (
+        {/* Main quick add bar (Replaced with inline Loading card when isCreating is true) */}
+        {isCreating ? (
           <div className="bg-white dark:bg-[#1c1c1e] rounded-3xl border border-gray-200/60 dark:border-slate-800/80 p-8 shadow-sm flex flex-col items-center justify-center space-y-4 animate-streak-pop max-w-xl mx-auto w-full min-h-[160px]">
             <div className="relative flex items-center justify-center">
               <div className="w-10 h-10 rounded-full border-2 border-slate-100 dark:border-slate-800 border-t-blue-600 animate-spin" style={{ animationDuration: '0.8s' }} />
@@ -317,27 +274,6 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
         <div className="space-y-3" style={{ minHeight: 120 }}>
           {paginatedNotebookVocabs.length > 0 ? (
             paginatedNotebookVocabs.map((vocab: any) => {
-              if (vocab.isAnalyzing) {
-                return (
-                  <div
-                    key={vocab._id}
-                    className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-gray-200/50 dark:border-slate-800/80 p-5 shadow-sm flex justify-between items-start select-none"
-                  >
-                    <div className="space-y-3 w-full pr-8">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base font-black text-slate-800 dark:text-white leading-tight">{vocab.originalInput}</span>
-                        <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-900/50 border border-blue-100 dark:border-slate-800 px-1.5 py-0.5 rounded animate-pulse">
-                          ✨ AI ANALYZING...
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 w-full">
-                        <div className="h-3.5 bg-slate-100 dark:bg-slate-800 rounded w-2/3 animate-pulse" />
-                        <div className="h-3 bg-slate-50 dark:bg-slate-800/60 rounded w-1/2 animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
               return (
                 <div
                   key={vocab._id}

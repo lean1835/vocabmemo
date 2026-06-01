@@ -45,6 +45,36 @@ export const vocabApi = baseApi.injectEndpoints({
         { type: "Vocab", id: "LIST" },
         { type: "Vocab", id: "METADATA" },
       ],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data: response } = await queryFulfilled;
+          if (response?.success && response?.data) {
+            // Cập nhật bộ nhớ đệm getVocabs cho cả 2 định dạng serialize tham số khác nhau
+            dispatch(
+              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100 }, (draft) => {
+                if (draft && Array.isArray(draft.data)) {
+                  const exists = draft.data.some((item: any) => item._id === response.data._id);
+                  if (!exists) {
+                    draft.data.unshift(response.data);
+                  }
+                }
+              })
+            );
+            dispatch(
+              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100, keyword: undefined }, (draft) => {
+                if (draft && Array.isArray(draft.data)) {
+                  const exists = draft.data.some((item: any) => item._id === response.data._id);
+                  if (!exists) {
+                    draft.data.unshift(response.data);
+                  }
+                }
+              })
+            );
+          }
+        } catch (err) {
+          console.error("Lỗi cập nhật cache pessimistic:", err);
+        }
+      },
     }),
     updateVocab: builder.mutation<any, { id: string; body: any }>({
       query: ({ id, body }) => ({
@@ -67,6 +97,30 @@ export const vocabApi = baseApi.injectEndpoints({
         { type: "Vocab", id: "LIST" },
         { type: "Vocab", id: "METADATA" },
       ],
+      async onQueryStarted(id, { dispatch, queryFulfilled }) {
+        // Cập nhật optimistic (xóa ngay lập tức trên UI)
+        const patchResult1 = dispatch(
+          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100 }, (draft) => {
+            if (draft && Array.isArray(draft.data)) {
+              draft.data = draft.data.filter((item: any) => item._id !== id);
+            }
+          })
+        );
+        const patchResult2 = dispatch(
+          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100, keyword: undefined }, (draft) => {
+            if (draft && Array.isArray(draft.data)) {
+              draft.data = draft.data.filter((item: any) => item._id !== id);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch (err) {
+          // Hoàn tác nếu cuộc gọi API thực tế thất bại
+          patchResult1.undo();
+          patchResult2.undo();
+        }
+      },
     }),
     getVocabMetadata: builder.query<any, void>({
       query: () => "/vocab/metadata",
