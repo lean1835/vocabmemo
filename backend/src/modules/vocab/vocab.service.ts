@@ -10,6 +10,8 @@ import UserModel from "../auth/auth.model";
 const geminiService = new GeminiService();
 
 export class VocabService {
+  private static memoryCache = new Map<string, any>();
+
   public async create(userId: string, payload: any): Promise<IApiResponse<IVocabulary> & { streakUpdated?: boolean; streakCount?: number }> {
     const { isManual } = payload;
 
@@ -65,8 +67,14 @@ export class VocabService {
     const cleanInput = originalInput.trim();
     const cacheKey = cleanInput.toLowerCase();
 
-    // 1. Kiểm tra xem từ/câu này đã từng được AI phân tích chưa
-    let cache = await VocabCache.findOne({ originalInput: cacheKey }).lean() as any;
+    // 1. Kiểm tra xem từ/câu này đã từng được AI phân tích trong RAM hay DB chưa
+    let cache = VocabService.memoryCache.get(cacheKey);
+    if (!cache) {
+      cache = await VocabCache.findOne({ originalInput: cacheKey }).lean() as any;
+      if (cache) {
+        VocabService.memoryCache.set(cacheKey, cache);
+      }
+    }
     
     let imageUrl = "";
 
@@ -121,125 +129,110 @@ export class VocabService {
       };
     }
 
-    // cache miss: Phản hồi siêu tốc chuẩn senior bằng cách tạo bản ghi tạm thời và chạy nền bất đồng bộ
-    logger.info(`[AI Cache Miss] Bắt đầu xử lý bất đồng bộ cho từ: "${cleanInput}". Tạo bản ghi giữ chỗ.`);
-    
-    const newVocab = await Vocabulary.create({
-      userId: new Types.ObjectId(userId),
-      originalInput: cleanInput,
-      correctedWord: cleanInput,
-      pronunciationUK: "",
-      pronunciationUS: "",
-      partOfSpeech: "noun",
-      meaningVi: "AI đang phân tích nghĩa...",
-      meaningEn: "=AI is analyzing this vocabulary, please wait...",
-      examples: [],
-      synonyms: [],
-      level: "B2",
-      category: "General",
-      source: source || "",
-      tags: userTags,
-      imageUrl: "",
-      isAnalyzing: true,
-    });
+    // cache miss: Gọi Gemini AI phân tích đồng bộ
+    try {
+      logger.info(`[AI Calling] Bắt đầu gọi Gemini API phân tích cho: "${cleanInput}"`);
+      const analysis = await geminiService.analyzeVocabulary(cleanInput, aiModel);
 
-    const streakResult = await this.updateUserStreak(userId);
+      // Lưu kết quả vào Cache dùng chung
+      const cacheData = {
+        originalInput: cacheKey,
+        correctedWord: analysis.word || cleanInput,
+        pronunciationUK: analysis.pronunciationUK || "",
+        pronunciationUS: analysis.pronunciationUS || "",
+        partOfSpeech: analysis.partOfSpeech || "noun",
+        meaningVi: analysis.meaningVi || "",
+        meaningEn: analysis.meaningEn || "",
+        examples: analysis.examples || [],
+        synonyms: analysis.synonyms || [],
+        level: analysis.level || "B2",
+        category: analysis.category || "General",
+        tags: analysis.tags || [],
+        imageUrl: "",
+      };
 
-    // Kích hoạt background process không đồng bộ, không dùng await để giải phóng main thread ngay lập tức
-    (async () => {
       try {
-        logger.info(`[Background AI] Bắt đầu gọi Gemini API phân tích cho từ: "${cleanInput}"`);
-        const analysis = await geminiService.analyzeVocabulary(cleanInput, aiModel);
-        
-        // Lưu kết quả vào Cache dùng chung
-        try {
-          await VocabCache.create({
-            originalInput: cacheKey,
-            correctedWord: analysis.word || cleanInput,
-            pronunciationUK: analysis.pronunciationUK || "",
-            pronunciationUS: analysis.pronunciationUS || "",
-            partOfSpeech: analysis.partOfSpeech || "noun",
-            meaningVi: analysis.meaningVi || "",
-            meaningEn: analysis.meaningEn || "",
-            examples: analysis.examples || [],
-            synonyms: analysis.synonyms || [],
-            level: analysis.level || "B2",
-            category: analysis.category || "General",
-            tags: analysis.tags || [],
-            imageUrl: "",
-          });
-        } catch (cacheErr: any) {
-          logger.error("[Background AI] Lỗi khi lưu bộ nhớ đệm VocabCache: " + cacheErr.message);
-        }
+        await VocabCache.create(cacheData);
+        VocabService.memoryCache.set(cacheKey, cacheData);
+      } catch (cacheErr: any) {
+        logger.error("[AI Cache] Lỗi khi lưu bộ nhớ đệm VocabCache: " + cacheErr.message);
+      }
 
-        const aiTags = analysis.tags || [];
+      const aiTags = analysis.tags || [];
+      const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
+
+      // Tạo bản ghi chính thức và lưu luôn
+      const newVocab = await Vocabulary.create({
+        userId: new Types.ObjectId(userId),
+        originalInput: cleanInput,
+        correctedWord: analysis.word || cleanInput,
+        pronunciationUK: analysis.pronunciationUK || "",
+        pronunciationUS: analysis.pronunciationUS || "",
+        partOfSpeech: analysis.partOfSpeech || "noun",
+        meaningVi: analysis.meaningVi || "",
+        meaningEn: analysis.meaningEn || "",
+        examples: analysis.examples || [],
+        synonyms: analysis.synonyms || [],
+        level: analysis.level || "B2",
+        category: analysis.category || "General",
+        source: source || "",
+        tags: mergedTags,
+        imageUrl: "",
+        isAnalyzing: false,
+      });
+
+      const streakResult = await this.updateUserStreak(userId);
+
+      return {
+        success: true,
+        message: "Lưu từ vựng thành công",
+        data: newVocab,
+        streakUpdated: streakResult.updated,
+        streakCount: streakResult.streakCount
+      };
+    } catch (err: any) {
+      logger.error(`[AI Error] Lỗi khi phân tích cho "${cleanInput}": ` + err.message);
+
+      // Cơ chế khôi phục khẩn cấp bằng Local Fallback khi gặp lỗi nghiêm trọng
+      try {
+        logger.info(`[AI Emergency] Kích hoạt Local Fallback cho: "${cleanInput}"`);
+        const fallbackAnalysis = geminiService["generateLocalFallback"](cleanInput);
+        const aiTags = fallbackAnalysis.tags || [];
         const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
 
-        // Cập nhật bản ghi chính thức
-        await Vocabulary.findByIdAndUpdate(newVocab._id, {
-          $set: {
-            correctedWord: analysis.word || cleanInput,
-            pronunciationUK: analysis.pronunciationUK || "",
-            pronunciationUS: analysis.pronunciationUS || "",
-            partOfSpeech: analysis.partOfSpeech || "noun",
-            meaningVi: analysis.meaningVi || "",
-            meaningEn: analysis.meaningEn || "",
-            examples: analysis.examples || [],
-            synonyms: analysis.synonyms || [],
-            level: analysis.level || "B2",
-            category: analysis.category || "General",
-            tags: mergedTags,
-            isAnalyzing: false,
-          }
+        const newVocab = await Vocabulary.create({
+          userId: new Types.ObjectId(userId),
+          originalInput: cleanInput,
+          correctedWord: fallbackAnalysis.word || cleanInput,
+          pronunciationUK: fallbackAnalysis.pronunciationUK || "",
+          pronunciationUS: fallbackAnalysis.pronunciationUS || "",
+          partOfSpeech: fallbackAnalysis.partOfSpeech || "noun",
+          meaningVi: fallbackAnalysis.meaningVi || "",
+          meaningEn: fallbackAnalysis.meaningEn || "",
+          examples: fallbackAnalysis.examples || [],
+          synonyms: fallbackAnalysis.synonyms || [],
+          level: fallbackAnalysis.level || "B2",
+          category: fallbackAnalysis.category || "General",
+          source: source || "",
+          tags: mergedTags,
+          imageUrl: "",
+          isAnalyzing: false,
         });
-        logger.info(`[Background AI] Hoàn tất cập nhật dữ liệu phân tích thành công cho: "${cleanInput}"`);
-      } catch (err: any) {
-        logger.error(`[Background AI] Lỗi nghiêm trọng khi phân tích cho "${cleanInput}": ` + err.message);
-        
-        // Cơ chế khôi phục khẩn cấp bằng Local Fallback khi gặp lỗi nghiêm trọng
-        try {
-          logger.info(`[Background AI Emergency] Kích hoạt Local Fallback khẩn cấp cho từ: "${cleanInput}"`);
-          const fallbackAnalysis = geminiService["generateLocalFallback"](cleanInput);
-          const aiTags = fallbackAnalysis.tags || [];
-          const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
 
-          await Vocabulary.findByIdAndUpdate(newVocab._id, {
-            $set: {
-              correctedWord: fallbackAnalysis.word || cleanInput,
-              pronunciationUK: fallbackAnalysis.pronunciationUK || "",
-              pronunciationUS: fallbackAnalysis.pronunciationUS || "",
-              partOfSpeech: fallbackAnalysis.partOfSpeech || "noun",
-              meaningVi: fallbackAnalysis.meaningVi || "",
-              meaningEn: fallbackAnalysis.meaningEn || "",
-              examples: fallbackAnalysis.examples || [],
-              synonyms: fallbackAnalysis.synonyms || [],
-              level: fallbackAnalysis.level || "B2",
-              category: fallbackAnalysis.category || "General",
-              tags: mergedTags,
-              isAnalyzing: false,
-            }
-          });
-          logger.info(`[Background AI Emergency] Đã khắc phục sự cố thành công bằng Local Fallback cho từ: "${cleanInput}"`);
-        } catch (fallbackErr: any) {
-          logger.error("[Background AI Emergency] Thất bại khi áp dụng Local Fallback: " + fallbackErr.message);
-          // Trường hợp xấu nhất, tắt trạng thái analyzing và ghi nhận lỗi để không bị đơ giao diện
-          await Vocabulary.findByIdAndUpdate(newVocab._id, {
-            $set: {
-              meaningVi: "Không thể phân tích từ vựng này. Vui lòng thử lại hoặc chỉnh sửa thủ công.",
-              isAnalyzing: false,
-            }
-          });
-        }
+        const streakResult = await this.updateUserStreak(userId);
+
+        return {
+          success: true,
+          message: "Lưu từ vựng thành công (Dữ liệu dự phòng)",
+          data: newVocab,
+          streakUpdated: streakResult.updated,
+          streakCount: streakResult.streakCount
+        };
+      } catch (fallbackErr: any) {
+        logger.error("[AI Emergency] Thất bại khi áp dụng Local Fallback: " + fallbackErr.message);
+        throw new ApiError(500, "Không thể phân tích từ vựng này. Vui lòng thử lại sau.");
       }
-    })();
-
-    return {
-      success: true,
-      message: "Lưu từ vựng thành công (AI đang phân tích bất đồng bộ dưới nền)",
-      data: newVocab,
-      streakUpdated: streakResult.updated,
-      streakCount: streakResult.streakCount
-    };
+    }
   }
 
   public async getByFilter(userId: string, filter: any): Promise<IPaginatedResponse<IVocabulary>> {

@@ -5,6 +5,7 @@ import { ApiError } from "./ApiError";
 
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
+  private modelsCache: Map<string, any> = new Map();
 
   constructor() {
     if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
@@ -17,17 +18,12 @@ export class GeminiService {
   public async analyzeVocabulary(input: string, preferredModel?: string): Promise<any> {
     const cleanInput = input.trim();
     
-    // Danh sách các mô hình từ thế hệ mới nhất đến cũ hơn để tự động thử nghiệm
+    // Danh sách các mô hình hoạt động và có quota trên API Key này
     let candidateModels = [
-      "gemini-3.1-flash-lite", // Mô hình call chính ưu tiên hạn mức cao (500 RPD)
-      "gemini-3.5-flash",
-      "gemini-3-flash",
-      "gemini-2.5-flash",
-      "gemini-2.5-flash-lite",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro"
+      "gemini-3.1-flash-lite", // Quota chính: 15 RPM, 500 RPD (Ưu tiên số 1)
+      "gemini-2.5-flash-lite", // Quota phụ: 10 RPM, 20 RPD
+      "gemini-2.5-flash",      // Quota phụ: 5 RPM, 20 RPD
+      "gemini-3.5-flash"       // Quota phụ: 5 RPM, 20 RPD
     ];
 
     // Nếu người dùng chọn mô hình ưu tiên, đưa mô hình đó lên đầu danh sách
@@ -139,8 +135,6 @@ export class GeminiService {
 
   // Thực thi cuộc gọi phân tích cấu trúc dùng chung
   private async executeAnalysis(input: string, modelName: string): Promise<any> {
-    const model = this.genAI.getGenerativeModel({ model: modelName });
-
     const systemInstruction = `
 Bạn là một chuyên gia từ điển học tiếng Anh và chuyên gia ngôn ngữ học.
 Hãy phân tích dữ liệu đầu vào của người dùng (từ đơn, cụm từ, hoặc câu tiếng Anh) và trả về một đối tượng JSON chuẩn xác 100% theo schema quy định.
@@ -211,13 +205,24 @@ BẮT BUỘC TRẢ VỀ DẠNG JSON TUÂN THỦ HOÀN TOÀN SCHEMA DƯỚI ĐÂY
       ]
     };
 
+    let model = this.modelsCache.get(modelName);
+    if (!model) {
+      model = this.genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemInstruction,
+      });
+      this.modelsCache.set(modelName, model);
+    }
+
     const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: systemInstruction + "\n" + `Dữ liệu đầu vào cần phân tích: "${input}"` }] }],
+      contents: [{ role: "user", parts: [{ text: `Dữ liệu đầu vào cần phân tích: "${input}"` }] }],
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: responseSchema as any,
         temperature: 0.1,
       }
+    }, {
+      timeout: 7000 // Timeout 7 giây để tránh bị treo khi model bị chậm hoặc lỗi
     });
 
     const text = result.response.text();
