@@ -26,14 +26,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ currentTab, ch
 
   // API calls
   const token = localStorage.getItem("token");
-  const { data: meData } = useGetMeQuery(undefined, { skip: !token });
+  const { data: meData, isLoading: isMeLoading } = useGetMeQuery(undefined, { skip: !token });
   const username = meData?.data?.username || "Học viên";
   const userInitials = username.slice(0, 2).toUpperCase();
 
-  const { data: vocabsData } = useGetVocabsQuery({
+  const { data: vocabsData, isLoading: isVocabsLoading } = useGetVocabsQuery({
     page: 1,
     limit: 100
-  });
+  }, { skip: !token });
+
+  const isGlobalLoading = (token && isMeLoading) || isVocabsLoading;
 
   const setCurrentTab = (tab: "notebook" | "flashcards" | "difficult" | "dashboard" | "archive") => {
     navigate(`/${tab}`);
@@ -80,6 +82,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ currentTab, ch
   return (
     <div className="h-screen w-screen flex flex-col md:flex-row bg-white text-slate-900 dark:bg-black dark:text-slate-100 font-sans overflow-hidden">
       
+      {isGlobalLoading && (
+        <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-white/60 dark:bg-black/60 backdrop-blur-md transition-all duration-300">
+          <Spin size="large" description="Đang tải dữ liệu..." />
+        </div>
+      )}
+
       {/* MOBILE HEADER */}
       <div className="md:hidden w-full h-16 bg-white dark:bg-[#151515] border-b border-gray-100 dark:border-slate-900 px-6 flex items-center justify-between shrink-0 z-50 absolute top-0 left-0 right-0">
         <button

@@ -94,15 +94,18 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
         setTagsVal("");
         setShowAdvanceAdd(false);
 
-        notification.success({
-          message: "Lưu từ vựng thành công",
-          description: `Đã phân tích và lưu từ "${result.data?.correctedWord || result.data?.originalInput || 'từ mới'}".`,
-          placement: "topRight"
-        });
+        // Đợi một khoảng thời gian ngắn để thẻ (card) render xuất hiện trước, rồi mới hiện thông báo thành công
+        setTimeout(() => {
+          notification.success({
+            message: "Lưu từ vựng thành công",
+            description: `Đã phân tích và lưu từ "${result.data?.correctedWord || result.data?.originalInput || 'từ mới'}".`,
+            placement: "topRight"
+          });
 
-        if (result.streakUpdated && onStreakUpdated) {
-          onStreakUpdated(result.streakCount);
-        }
+          if (result.streakUpdated && onStreakUpdated) {
+            onStreakUpdated(result.streakCount);
+          }
+        }, 300);
       }
     } catch (err: any) {
       notification.error({
