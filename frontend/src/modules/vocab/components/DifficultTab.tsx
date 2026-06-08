@@ -37,7 +37,7 @@ export const DifficultTab: React.FC = () => {
   const [editForm] = Form.useForm();
 
   // API calls
-  const { data: vocabsData, isFetching: isVocabsLoading } = useGetVocabsQuery({
+  const { data: vocabsData, isLoading: isVocabsLoadingInitial, isFetching: isVocabsLoading } = useGetVocabsQuery({
     page: 1,
     limit: 100,
     keyword: debouncedKeyword || undefined
@@ -213,7 +213,7 @@ export const DifficultTab: React.FC = () => {
         </span>
       </div>
 
-      <Spin spinning={isVocabsLoading}>
+      <Spin spinning={isVocabsLoading && !isVocabsLoadingInitial}>
       <div className="space-y-4 pt-2" style={{ minHeight: 200 }}>
         {paginatedVocabs.length > 0 ? (
           paginatedVocabs.map((vocab: any) => {

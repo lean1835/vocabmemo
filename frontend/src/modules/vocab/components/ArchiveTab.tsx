@@ -40,7 +40,7 @@ export const ArchiveTab: React.FC = () => {
   const [editForm] = Form.useForm();
 
   // API calls
-  const { data: vocabsData, isFetching: isVocabsLoading } = useGetVocabsQuery({
+  const { data: vocabsData, isLoading: isVocabsLoadingInitial, isFetching: isVocabsLoading } = useGetVocabsQuery({
     page: 1,
     limit: 100,
     keyword: debouncedKeyword || undefined
@@ -356,7 +356,7 @@ export const ArchiveTab: React.FC = () => {
       </div>
 
       {/* Grouped Archive timeline entries */}
-      <Spin spinning={isVocabsLoading}>
+      <Spin spinning={isVocabsLoading && !isVocabsLoadingInitial}>
       <div className="space-y-8 pt-4" style={{ minHeight: 200 }}>
         {Object.keys(groupedVocabs).length > 0 ? (
           Object.entries(groupedVocabs).map(([dateStr, vocabs]) => (

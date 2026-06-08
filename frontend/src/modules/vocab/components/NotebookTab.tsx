@@ -28,6 +28,7 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
   const [tagsVal, setTagsVal] = useState("");
   const [showAdvanceAdd, setShowAdvanceAdd] = useState(false);
   const [selectedHistoryVocab, setSelectedHistoryVocab] = useState<any | null>(null);
+  const [newCardId, setNewCardId] = useState<string | null>(null);
   // Debounce keyword to prevent UI jitter on each keystroke
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword), 300);
@@ -35,7 +36,7 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
   }, [keyword]);
 
   // API calls
-  const { data: vocabsData, isLoading: isVocabsLoading, refetch } = useGetVocabsQuery({
+  const { data: vocabsData, isLoading: isVocabsLoading, isFetching: isVocabsFetching, refetch } = useGetVocabsQuery({
     page: 1,
     limit: 100,
     keyword: debouncedKeyword || undefined
@@ -93,6 +94,12 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
         setSourceVal("");
         setTagsVal("");
         setShowAdvanceAdd(false);
+        setNewCardId(result.data?._id || null);
+
+        // Clear newCardId after animation is complete
+        setTimeout(() => {
+          setNewCardId(null);
+        }, 1500);
 
         // Đợi một khoảng thời gian ngắn để thẻ (card) render xuất hiện trước, rồi mới hiện thông báo thành công
         setTimeout(() => {
@@ -273,7 +280,7 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
         </div>
 
         {/* Today's items list */}
-        <Spin spinning={isVocabsLoading} size="small">
+        <Spin spinning={isVocabsFetching && !isVocabsLoading} size="small">
         <div className="space-y-3" style={{ minHeight: 120 }}>
           {paginatedNotebookVocabs.length > 0 ? (
             paginatedNotebookVocabs.map((vocab: any) => {
@@ -281,7 +288,9 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
                 <div
                   key={vocab._id}
                   onClick={() => setSelectedHistoryVocab(vocab)}
-                  className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-gray-200/50 dark:border-slate-800/80 p-5 shadow-sm flex justify-between items-start transition-all hover:border-gray-300 dark:hover:border-slate-700 cursor-pointer"
+                  className={`bg-white dark:bg-[#1c1c1e] rounded-2xl border border-gray-200/50 dark:border-slate-800/80 p-5 shadow-sm flex justify-between items-start transition-all hover:border-gray-300 dark:hover:border-slate-700 cursor-pointer ${
+                    vocab._id === newCardId ? "animate-new-card" : ""
+                  }`}
                 >
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
