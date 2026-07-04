@@ -20,6 +20,16 @@ import {
 import { playVocabSpeech } from "../services/tts";
 import { useGetVocabsQuery, useUpdateVocabMutation } from "../services/vocabApi";
 
+const shuffleArray = <T,>(array: T[] | undefined): T[] => {
+  if (!array) return [];
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 interface FlashcardsTabProps {
   studyMode: "selection" | "studying";
   setStudyMode: React.Dispatch<React.SetStateAction<"selection" | "studying">>;
@@ -204,15 +214,15 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
           description: "Hệ thống sẽ ôn tập toàn bộ từ vựng hiện có.",
           placement: "topRight"
         });
-        setStudyCardsList(vocabsData.data);
+        setStudyCardsList(shuffleArray(vocabsData.data));
       } else {
-        setStudyCardsList(filtered);
+        setStudyCardsList(shuffleArray(filtered));
       }
       setStudyMode("studying");
       setCurrentCardIdx(0);
       setIsCardFlipped(false);
     } else if (selectedStudyType === "all") {
-      setStudyCardsList(vocabsData.data);
+      setStudyCardsList(shuffleArray(vocabsData.data));
       setStudyMode("studying");
       setCurrentCardIdx(0);
       setIsCardFlipped(false);
@@ -226,7 +236,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
         });
         return;
       }
-      setStudyCardsList(filtered);
+      setStudyCardsList(shuffleArray(filtered));
       setStudyMode("studying");
       setCurrentCardIdx(0);
       setIsCardFlipped(false);
@@ -267,7 +277,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
       return;
     }
 
-    setStudyCardsList(filtered);
+    setStudyCardsList(shuffleArray(filtered));
     setStudyFilterModalOpen(null);
     setStudyMode("studying");
     setCurrentCardIdx(0);
@@ -296,7 +306,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
       return;
     }
 
-    setStudyCardsList(filtered);
+    setStudyCardsList(shuffleArray(filtered));
     setStudyFilterModalOpen(null);
     setStudyMode("studying");
     setCurrentCardIdx(0);
@@ -325,7 +335,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
       return;
     }
 
-    setStudyCardsList(filtered);
+    setStudyCardsList(shuffleArray(filtered));
     setStudyFilterModalOpen(null);
     setStudyMode("studying");
     setCurrentCardIdx(0);
