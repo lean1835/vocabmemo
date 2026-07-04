@@ -1,13 +1,6 @@
 import mongoose from 'mongoose';
 import { MONGODB_URI } from './environment';
 import { logger } from '@common/utils/logger';
-import dns from 'dns';
-
-// Fix querySrv ECONNREFUSED issues on certain network/DNS setups (e.g., node dns resolution errors)
-if (MONGODB_URI.startsWith('mongodb+srv')) {
-    dns.setServers(['1.1.1.1', '8.8.8.8']);
-}
-
 
 export const connectDB = async (): Promise<void> => {
     try {
