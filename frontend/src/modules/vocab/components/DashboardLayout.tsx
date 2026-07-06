@@ -32,7 +32,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ currentTab, ch
 
   const { data: vocabsData, isLoading: isVocabsLoading } = useGetVocabsQuery({
     page: 1,
-    limit: 100
+    limit: 10000
   }, { skip: !token });
 
   const isGlobalLoading = (token && isMeLoading) || isVocabsLoading;

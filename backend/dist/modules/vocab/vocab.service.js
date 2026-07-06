@@ -9,9 +9,11 @@ const vocab_model_1 = require("./vocab.model");
 const ApiError_1 = require("../../common/utils/ApiError");
 const gemini_service_1 = require("../../common/utils/gemini.service");
 const logger_1 = require("../../common/utils/logger");
+const srs_algorithm_1 = require("../../common/utils/srs-algorithm");
 const auth_model_1 = __importDefault(require("../auth/auth.model"));
 const geminiService = new gemini_service_1.GeminiService();
 class VocabService {
+    static memoryCache = new Map();
     async create(userId, payload) {
         const { isManual } = payload;
         if (isManual) {
@@ -47,8 +49,14 @@ class VocabService {
         const { originalInput, source, tags: userTags = [], aiModel } = payload;
         const cleanInput = originalInput.trim();
         const cacheKey = cleanInput.toLowerCase();
-        // 1. Kiểm tra xem từ/câu này đã từng được AI phân tích chưa
-        let cache = await vocab_model_1.VocabCache.findOne({ originalInput: cacheKey }).lean();
+        // 1. Kiểm tra xem từ/câu này đã từng được AI phân tích trong RAM hay DB chưa
+        let cache = VocabService.memoryCache.get(cacheKey);
+        if (!cache) {
+            cache = await vocab_model_1.VocabCache.findOne({ originalInput: cacheKey }).lean();
+            if (cache) {
+                VocabService.memoryCache.set(cacheKey, cache);
+            }
+        }
         let imageUrl = "";
         if (cache) {
             logger_1.logger.info(`[AI Cache Hit] Tìm thấy kết quả phân tích cao cấp cho từ/câu: "${cleanInput}"`);
@@ -96,119 +104,103 @@ class VocabService {
                 streakCount: streakResult.streakCount
             };
         }
-        // cache miss: Phản hồi siêu tốc chuẩn senior bằng cách tạo bản ghi tạm thời và chạy nền bất đồng bộ
-        logger_1.logger.info(`[AI Cache Miss] Bắt đầu xử lý bất đồng bộ cho từ: "${cleanInput}". Tạo bản ghi giữ chỗ.`);
-        const newVocab = await vocab_model_1.Vocabulary.create({
-            userId: new mongoose_1.Types.ObjectId(userId),
-            originalInput: cleanInput,
-            correctedWord: cleanInput,
-            pronunciationUK: "",
-            pronunciationUS: "",
-            partOfSpeech: "noun",
-            meaningVi: "AI đang phân tích nghĩa...",
-            meaningEn: "=AI is analyzing this vocabulary, please wait...",
-            examples: [],
-            synonyms: [],
-            level: "B2",
-            category: "General",
-            source: source || "",
-            tags: userTags,
-            imageUrl: "",
-            isAnalyzing: true,
-        });
-        const streakResult = await this.updateUserStreak(userId);
-        // Kích hoạt background process không đồng bộ, không dùng await để giải phóng main thread ngay lập tức
-        (async () => {
+        // cache miss: Gọi Gemini AI phân tích đồng bộ
+        try {
+            logger_1.logger.info(`[AI Calling] Bắt đầu gọi Gemini API phân tích cho: "${cleanInput}"`);
+            const analysis = await geminiService.analyzeVocabulary(cleanInput, aiModel);
+            // Lưu kết quả vào Cache dùng chung
+            const cacheData = {
+                originalInput: cacheKey,
+                correctedWord: analysis.word || cleanInput,
+                pronunciationUK: analysis.pronunciationUK || "",
+                pronunciationUS: analysis.pronunciationUS || "",
+                partOfSpeech: analysis.partOfSpeech || "noun",
+                meaningVi: analysis.meaningVi || "",
+                meaningEn: analysis.meaningEn || "",
+                examples: analysis.examples || [],
+                synonyms: analysis.synonyms || [],
+                level: analysis.level || "B2",
+                category: analysis.category || "General",
+                tags: analysis.tags || [],
+                imageUrl: "",
+            };
             try {
-                logger_1.logger.info(`[Background AI] Bắt đầu gọi Gemini API phân tích cho từ: "${cleanInput}"`);
-                const analysis = await geminiService.analyzeVocabulary(cleanInput, aiModel);
-                // Lưu kết quả vào Cache dùng chung
-                try {
-                    await vocab_model_1.VocabCache.create({
-                        originalInput: cacheKey,
-                        correctedWord: analysis.word || cleanInput,
-                        pronunciationUK: analysis.pronunciationUK || "",
-                        pronunciationUS: analysis.pronunciationUS || "",
-                        partOfSpeech: analysis.partOfSpeech || "noun",
-                        meaningVi: analysis.meaningVi || "",
-                        meaningEn: analysis.meaningEn || "",
-                        examples: analysis.examples || [],
-                        synonyms: analysis.synonyms || [],
-                        level: analysis.level || "B2",
-                        category: analysis.category || "General",
-                        tags: analysis.tags || [],
-                        imageUrl: "",
-                    });
-                }
-                catch (cacheErr) {
-                    logger_1.logger.error("[Background AI] Lỗi khi lưu bộ nhớ đệm VocabCache: " + cacheErr.message);
-                }
-                const aiTags = analysis.tags || [];
+                await vocab_model_1.VocabCache.create(cacheData);
+                VocabService.memoryCache.set(cacheKey, cacheData);
+            }
+            catch (cacheErr) {
+                logger_1.logger.error("[AI Cache] Lỗi khi lưu bộ nhớ đệm VocabCache: " + cacheErr.message);
+            }
+            const aiTags = analysis.tags || [];
+            const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
+            // Tạo bản ghi chính thức và lưu luôn
+            const newVocab = await vocab_model_1.Vocabulary.create({
+                userId: new mongoose_1.Types.ObjectId(userId),
+                originalInput: cleanInput,
+                correctedWord: analysis.word || cleanInput,
+                pronunciationUK: analysis.pronunciationUK || "",
+                pronunciationUS: analysis.pronunciationUS || "",
+                partOfSpeech: analysis.partOfSpeech || "noun",
+                meaningVi: analysis.meaningVi || "",
+                meaningEn: analysis.meaningEn || "",
+                examples: analysis.examples || [],
+                synonyms: analysis.synonyms || [],
+                level: analysis.level || "B2",
+                category: analysis.category || "General",
+                source: source || "",
+                tags: mergedTags,
+                imageUrl: "",
+                isAnalyzing: false,
+            });
+            const streakResult = await this.updateUserStreak(userId);
+            return {
+                success: true,
+                message: "Lưu từ vựng thành công",
+                data: newVocab,
+                streakUpdated: streakResult.updated,
+                streakCount: streakResult.streakCount
+            };
+        }
+        catch (err) {
+            logger_1.logger.error(`[AI Error] Lỗi khi phân tích cho "${cleanInput}": ` + err.message);
+            // Cơ chế khôi phục khẩn cấp bằng Local Fallback khi gặp lỗi nghiêm trọng
+            try {
+                logger_1.logger.info(`[AI Emergency] Kích hoạt Local Fallback cho: "${cleanInput}"`);
+                const fallbackAnalysis = geminiService["generateLocalFallback"](cleanInput);
+                const aiTags = fallbackAnalysis.tags || [];
                 const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
-                // Cập nhật bản ghi chính thức
-                await vocab_model_1.Vocabulary.findByIdAndUpdate(newVocab._id, {
-                    $set: {
-                        correctedWord: analysis.word || cleanInput,
-                        pronunciationUK: analysis.pronunciationUK || "",
-                        pronunciationUS: analysis.pronunciationUS || "",
-                        partOfSpeech: analysis.partOfSpeech || "noun",
-                        meaningVi: analysis.meaningVi || "",
-                        meaningEn: analysis.meaningEn || "",
-                        examples: analysis.examples || [],
-                        synonyms: analysis.synonyms || [],
-                        level: analysis.level || "B2",
-                        category: analysis.category || "General",
-                        tags: mergedTags,
-                        isAnalyzing: false,
-                    }
+                const newVocab = await vocab_model_1.Vocabulary.create({
+                    userId: new mongoose_1.Types.ObjectId(userId),
+                    originalInput: cleanInput,
+                    correctedWord: fallbackAnalysis.word || cleanInput,
+                    pronunciationUK: fallbackAnalysis.pronunciationUK || "",
+                    pronunciationUS: fallbackAnalysis.pronunciationUS || "",
+                    partOfSpeech: fallbackAnalysis.partOfSpeech || "noun",
+                    meaningVi: fallbackAnalysis.meaningVi || "",
+                    meaningEn: fallbackAnalysis.meaningEn || "",
+                    examples: fallbackAnalysis.examples || [],
+                    synonyms: fallbackAnalysis.synonyms || [],
+                    level: fallbackAnalysis.level || "B2",
+                    category: fallbackAnalysis.category || "General",
+                    source: source || "",
+                    tags: mergedTags,
+                    imageUrl: "",
+                    isAnalyzing: false,
                 });
-                logger_1.logger.info(`[Background AI] Hoàn tất cập nhật dữ liệu phân tích thành công cho: "${cleanInput}"`);
+                const streakResult = await this.updateUserStreak(userId);
+                return {
+                    success: true,
+                    message: "Lưu từ vựng thành công (Dữ liệu dự phòng)",
+                    data: newVocab,
+                    streakUpdated: streakResult.updated,
+                    streakCount: streakResult.streakCount
+                };
             }
-            catch (err) {
-                logger_1.logger.error(`[Background AI] Lỗi nghiêm trọng khi phân tích cho "${cleanInput}": ` + err.message);
-                // Cơ chế khôi phục khẩn cấp bằng Local Fallback khi gặp lỗi nghiêm trọng
-                try {
-                    logger_1.logger.info(`[Background AI Emergency] Kích hoạt Local Fallback khẩn cấp cho từ: "${cleanInput}"`);
-                    const fallbackAnalysis = geminiService["generateLocalFallback"](cleanInput);
-                    const aiTags = fallbackAnalysis.tags || [];
-                    const mergedTags = Array.from(new Set([...userTags, ...aiTags]));
-                    await vocab_model_1.Vocabulary.findByIdAndUpdate(newVocab._id, {
-                        $set: {
-                            correctedWord: fallbackAnalysis.word || cleanInput,
-                            pronunciationUK: fallbackAnalysis.pronunciationUK || "",
-                            pronunciationUS: fallbackAnalysis.pronunciationUS || "",
-                            partOfSpeech: fallbackAnalysis.partOfSpeech || "noun",
-                            meaningVi: fallbackAnalysis.meaningVi || "",
-                            meaningEn: fallbackAnalysis.meaningEn || "",
-                            examples: fallbackAnalysis.examples || [],
-                            synonyms: fallbackAnalysis.synonyms || [],
-                            level: fallbackAnalysis.level || "B2",
-                            category: fallbackAnalysis.category || "General",
-                            tags: mergedTags,
-                            isAnalyzing: false,
-                        }
-                    });
-                    logger_1.logger.info(`[Background AI Emergency] Đã khắc phục sự cố thành công bằng Local Fallback cho từ: "${cleanInput}"`);
-                }
-                catch (fallbackErr) {
-                    logger_1.logger.error("[Background AI Emergency] Thất bại khi áp dụng Local Fallback: " + fallbackErr.message);
-                    // Trường hợp xấu nhất, tắt trạng thái analyzing và ghi nhận lỗi để không bị đơ giao diện
-                    await vocab_model_1.Vocabulary.findByIdAndUpdate(newVocab._id, {
-                        $set: {
-                            meaningVi: "Không thể phân tích từ vựng này. Vui lòng thử lại hoặc chỉnh sửa thủ công.",
-                            isAnalyzing: false,
-                        }
-                    });
-                }
+            catch (fallbackErr) {
+                logger_1.logger.error("[AI Emergency] Thất bại khi áp dụng Local Fallback: " + fallbackErr.message);
+                throw new ApiError_1.ApiError(500, "Không thể phân tích từ vựng này. Vui lòng thử lại sau.");
             }
-        })();
-        return {
-            success: true,
-            message: "Lưu từ vựng thành công (AI đang phân tích bất đồng bộ dưới nền)",
-            data: newVocab,
-            streakUpdated: streakResult.updated,
-            streakCount: streakResult.streakCount
-        };
+        }
     }
     async getByFilter(userId, filter) {
         const page = Math.max(1, parseInt(filter.page || "1", 10));
@@ -311,6 +303,72 @@ class VocabService {
                 categories: categoriesResult.filter(Boolean),
                 tags: tagsResult.filter(Boolean),
             },
+        };
+    }
+    async getReviewQueue(userId) {
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999); // Lấy đến hết ngày hôm nay
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0); // Đầu ngày hôm nay
+        const records = await vocab_model_1.Vocabulary.find({
+            userId: new mongoose_1.Types.ObjectId(userId),
+            $or: [
+                { "srs.nextReviewDate": { $lte: endOfToday } },
+                { "srs.nextReviewDate": { $exists: false } },
+                { createdAt: { $gte: startOfToday } } // Giữ các từ tạo mới hôm nay luôn nằm trong danh sách học
+            ],
+        })
+            .select("-srs.history") // Projection tối ưu hiệu năng loại bỏ history
+            .sort({ "srs.nextReviewDate": 1 }) // Ôn những từ đến hạn trước
+            .lean();
+        return {
+            success: true,
+            message: "Lấy danh sách ôn tập hôm nay thành công",
+            data: records,
+        };
+    }
+    async reviewVocab(userId, vocabId, rating) {
+        const record = await vocab_model_1.Vocabulary.findOne({
+            _id: new mongoose_1.Types.ObjectId(vocabId),
+            userId: new mongoose_1.Types.ObjectId(userId),
+        });
+        if (!record) {
+            throw new ApiError_1.ApiError(404, "Không tìm thấy từ vựng này trong kho của bạn");
+        }
+        const currentRepetition = record.srs?.repetition ?? 0;
+        const currentInterval = record.srs?.interval ?? 0;
+        const currentEasiness = record.srs?.easiness ?? 2.5;
+        const result = (0, srs_algorithm_1.calculateSM2)({
+            repetition: currentRepetition,
+            interval: currentInterval,
+            easiness: currentEasiness,
+            rating,
+        });
+        // Cập nhật các thông số SRS và lịch sử ôn tập
+        record.srs = {
+            repetition: result.repetition,
+            interval: result.interval,
+            easiness: result.easiness,
+            nextReviewDate: result.nextReviewDate,
+            history: [
+                ...(record.srs?.history || []),
+                {
+                    reviewDate: new Date(),
+                    rating,
+                    prevInterval: currentInterval,
+                    nextInterval: result.interval,
+                },
+            ],
+        };
+        // Tự động cập nhật chuỗi Streak khi học viên ôn tập từ vựng
+        const streakResult = await this.updateUserStreak(userId);
+        await record.save();
+        return {
+            success: true,
+            message: "Đánh giá từ vựng thành công",
+            data: record,
+            streakUpdated: streakResult.updated,
+            streakCount: streakResult.streakCount,
         };
     }
     async updateUserStreak(userId) {

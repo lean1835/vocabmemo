@@ -38,7 +38,7 @@ export const NotebookTab: React.FC<NotebookTabProps> = ({ onStreakUpdated }) => 
   // API calls
   const { data: vocabsData, isLoading: isVocabsLoading, isFetching: isVocabsFetching, refetch } = useGetVocabsQuery({
     page: 1,
-    limit: 100,
+    limit: 10000,
     keyword: debouncedKeyword || undefined
   });
 

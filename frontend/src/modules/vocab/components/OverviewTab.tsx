@@ -17,7 +17,7 @@ export const OverviewTab: React.FC = () => {
   // API calls
   const { data: vocabsData } = useGetVocabsQuery({
     page: 1,
-    limit: 100
+    limit: 10000
   });
 
   const { data: metadataData } = useGetVocabMetadataQuery();

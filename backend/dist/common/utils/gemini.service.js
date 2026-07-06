@@ -6,6 +6,7 @@ const environment_1 = require("../config/environment");
 const logger_1 = require("./logger");
 class GeminiService {
     genAI;
+    modelsCache = new Map();
     constructor() {
         if (!environment_1.GEMINI_API_KEY || environment_1.GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
             logger_1.logger.warn("GEMINI_API_KEY chưa được cấu hình chính xác trong file .env!");
@@ -15,17 +16,12 @@ class GeminiService {
     // Hàm điều phối phân tích chính hỗ trợ cơ chế Tự Động Dự Phòng (Auto-Fallback)
     async analyzeVocabulary(input, preferredModel) {
         const cleanInput = input.trim();
-        // Danh sách các mô hình từ thế hệ mới nhất đến cũ hơn để tự động thử nghiệm
+        // Danh sách các mô hình hoạt động và có quota trên API Key này
         let candidateModels = [
-            "gemini-3.1-flash-lite", // Mô hình call chính ưu tiên hạn mức cao (500 RPD)
-            "gemini-3.5-flash",
-            "gemini-3-flash",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            "gemini-3.1-flash-lite", // Quota chính: 15 RPM, 500 RPD (Ưu tiên số 1)
+            "gemini-2.5-flash-lite", // Quota phụ: 10 RPM, 20 RPD
+            "gemini-2.5-flash", // Quota phụ: 5 RPM, 20 RPD
+            "gemini-3.5-flash" // Quota phụ: 5 RPM, 20 RPD
         ];
         // Nếu người dùng chọn mô hình ưu tiên, đưa mô hình đó lên đầu danh sách
         if (preferredModel && candidateModels.includes(preferredModel)) {
@@ -133,7 +129,6 @@ class GeminiService {
     }
     // Thực thi cuộc gọi phân tích cấu trúc dùng chung
     async executeAnalysis(input, modelName) {
-        const model = this.genAI.getGenerativeModel({ model: modelName });
         const systemInstruction = `
 Bạn là một chuyên gia từ điển học tiếng Anh và chuyên gia ngôn ngữ học.
 Hãy phân tích dữ liệu đầu vào của người dùng (từ đơn, cụm từ, hoặc câu tiếng Anh) và trả về một đối tượng JSON chuẩn xác 100% theo schema quy định.
@@ -202,13 +197,23 @@ BẮT BUỘC TRẢ VỀ DẠNG JSON TUÂN THỦ HOÀN TOÀN SCHEMA DƯỚI ĐÂY
                 "imageKeyword"
             ]
         };
+        let model = this.modelsCache.get(modelName);
+        if (!model) {
+            model = this.genAI.getGenerativeModel({
+                model: modelName,
+                systemInstruction: systemInstruction,
+            });
+            this.modelsCache.set(modelName, model);
+        }
         const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: systemInstruction + "\n" + `Dữ liệu đầu vào cần phân tích: "${input}"` }] }],
+            contents: [{ role: "user", parts: [{ text: `Dữ liệu đầu vào cần phân tích: "${input}"` }] }],
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: responseSchema,
                 temperature: 0.1,
             }
+        }, {
+            timeout: 15000 // Tăng timeout lên 15 giây để tránh fallback non khi mạng bị lag nhẹ
         });
         const text = result.response.text();
         return JSON.parse(text);

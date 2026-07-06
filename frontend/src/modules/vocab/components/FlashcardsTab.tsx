@@ -75,7 +75,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({
   // API calls
   const { data: vocabsData } = useGetVocabsQuery({
     page: 1,
-    limit: 100
+    limit: 10000
   });
   const [updateVocab] = useUpdateVocabMutation();
 

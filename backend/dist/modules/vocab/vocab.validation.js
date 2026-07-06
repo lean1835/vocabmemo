@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateVocabSchema = exports.createVocabSchema = void 0;
+exports.reviewVocabSchema = exports.updateVocabSchema = exports.createVocabSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.createVocabSchema = joi_1.default.object({
     isManual: joi_1.default.boolean().optional(),
@@ -58,4 +58,12 @@ exports.updateVocabSchema = joi_1.default.object({
     source: joi_1.default.string().allow("").optional(),
     tags: joi_1.default.array().items(joi_1.default.string()).optional(),
     isDifficult: joi_1.default.boolean().optional(),
+});
+exports.reviewVocabSchema = joi_1.default.object({
+    rating: joi_1.default.number().integer().min(0).max(5).required().messages({
+        "number.base": "Điểm đánh giá phải là số",
+        "number.min": "Điểm đánh giá thấp nhất là 0",
+        "number.max": "Điểm đánh giá cao nhất là 5",
+        "any.required": "Điểm đánh giá là bắt buộc"
+    })
 });

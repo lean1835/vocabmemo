@@ -7,6 +7,11 @@ exports.connectDB = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const environment_1 = require("./environment");
 const logger_1 = require("../utils/logger");
+const dns_1 = __importDefault(require("dns"));
+// Fix querySrv ECONNREFUSED issues on certain network/DNS setups (e.g., node dns resolution errors)
+if (environment_1.MONGODB_URI.startsWith('mongodb+srv')) {
+    dns_1.default.setServers(['1.1.1.1', '8.8.8.8']);
+}
 const connectDB = async () => {
     try {
         mongoose_1.default.set('strictQuery', true);

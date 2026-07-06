@@ -56,13 +56,36 @@ const VocabularySchema = new mongoose_1.Schema({
     source: { type: String, trim: true, default: "" },
     tags: [{ type: String, trim: true }],
     imageUrl: { type: String, trim: true, default: "" },
+    imagePrompt: { type: String, trim: true, default: "" },
     isDifficult: { type: Boolean, default: false },
     isAnalyzing: { type: Boolean, default: false },
+    // Spaced Repetition System (SRS)
+    srs: {
+        repetition: { type: Number, default: 0 },
+        interval: { type: Number, default: 0 },
+        easiness: { type: Number, default: 2.5 },
+        nextReviewDate: { type: Date, default: () => new Date() },
+        history: [
+            {
+                reviewDate: { type: Date, default: Date.now },
+                rating: { type: Number },
+                prevInterval: { type: Number },
+                nextInterval: { type: Number }
+            }
+        ]
+    },
+    // AI enhanced info
+    aiMnemonics: { type: String, trim: true, default: "" },
+    aiWordRoot: {
+        root: { type: String, trim: true, default: "" },
+        explanation: { type: String, trim: true, default: "" }
+    }
 }, { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } });
 VocabularySchema.index({ userId: 1, createdAt: -1 }, { name: "idx_vocab_userId_createdAt", background: true });
 VocabularySchema.index({ userId: 1, category: 1 }, { name: "idx_vocab_userId_category", background: true });
 VocabularySchema.index({ userId: 1, tags: 1 }, { name: "idx_vocab_userId_tags", background: true });
 VocabularySchema.index({ userId: 1 }, { name: "idx_vocab_userId", background: true });
+VocabularySchema.index({ userId: 1, "srs.nextReviewDate": 1 }, { name: "idx_vocab_userId_srsReview", background: true });
 VocabularySchema.index({ correctedWord: 1 }, { name: "idx_vocab_correctedWord", background: true });
 VocabularySchema.index({ category: 1 }, { name: "idx_vocab_category", background: true });
 VocabularySchema.index({ tags: 1 }, { name: "idx_vocab_tags", background: true });
@@ -80,6 +103,12 @@ const VocabCacheSchema = new mongoose_1.Schema({
     category: { type: String, trim: true },
     tags: [{ type: String, trim: true }],
     imageUrl: { type: String, trim: true, default: "" },
+    imagePrompt: { type: String, trim: true, default: "" },
+    aiMnemonics: { type: String, trim: true, default: "" },
+    aiWordRoot: {
+        root: { type: String, trim: true, default: "" },
+        explanation: { type: String, trim: true, default: "" }
+    }
 }, { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } });
 VocabCacheSchema.index({ originalInput: 1 }, { name: "idx_vocab_cache_original", background: true });
 VocabCacheSchema.index({ correctedWord: 1 }, { name: "idx_vocab_cache_corrected", background: true });

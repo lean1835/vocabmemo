@@ -42,7 +42,7 @@ export const ArchiveTab: React.FC = () => {
   // API calls
   const { data: vocabsData, isLoading: isVocabsLoadingInitial, isFetching: isVocabsLoading } = useGetVocabsQuery({
     page: 1,
-    limit: 100,
+    limit: 10000,
     keyword: debouncedKeyword || undefined
   });
 

@@ -51,7 +51,7 @@ export const vocabApi = baseApi.injectEndpoints({
           if (response?.success && response?.data) {
             // Cập nhật bộ nhớ đệm getVocabs cho cả 2 định dạng serialize tham số khác nhau
             dispatch(
-              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100 }, (draft) => {
+              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 10000 }, (draft) => {
                 if (draft && Array.isArray(draft.data)) {
                   const exists = draft.data.some((item: any) => item._id === response.data._id);
                   if (!exists) {
@@ -61,7 +61,7 @@ export const vocabApi = baseApi.injectEndpoints({
               })
             );
             dispatch(
-              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100, keyword: undefined }, (draft) => {
+              vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 10000, keyword: undefined }, (draft) => {
                 if (draft && Array.isArray(draft.data)) {
                   const exists = draft.data.some((item: any) => item._id === response.data._id);
                   if (!exists) {
@@ -100,14 +100,14 @@ export const vocabApi = baseApi.injectEndpoints({
       async onQueryStarted(id, { dispatch, queryFulfilled }) {
         // Cập nhật optimistic (xóa ngay lập tức trên UI)
         const patchResult1 = dispatch(
-          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100 }, (draft) => {
+          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 10000 }, (draft) => {
             if (draft && Array.isArray(draft.data)) {
               draft.data = draft.data.filter((item: any) => item._id !== id);
             }
           })
         );
         const patchResult2 = dispatch(
-          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 100, keyword: undefined }, (draft) => {
+          vocabApi.util.updateQueryData("getVocabs", { page: 1, limit: 10000, keyword: undefined }, (draft) => {
             if (draft && Array.isArray(draft.data)) {
               draft.data = draft.data.filter((item: any) => item._id !== id);
             }

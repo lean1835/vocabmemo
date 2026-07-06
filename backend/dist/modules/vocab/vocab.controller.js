@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getVocabMetadata = exports.deleteVocab = exports.updateVocab = exports.getVocabById = exports.getVocabs = exports.createVocab = void 0;
+exports.reviewVocab = exports.getReviewQueue = exports.getVocabMetadata = exports.deleteVocab = exports.updateVocab = exports.getVocabById = exports.getVocabs = exports.createVocab = void 0;
 const catchAsync_1 = require("../../common/utils/catchAsync");
 const vocab_service_1 = require("./vocab.service");
 const vocabService = new vocab_service_1.VocabService();
@@ -39,5 +39,17 @@ exports.deleteVocab = (0, catchAsync_1.catchAsync)(async (req, res) => {
 exports.getVocabMetadata = (0, catchAsync_1.catchAsync)(async (req, res) => {
     const userId = req.user.id;
     const result = await vocabService.getMetadata(userId);
+    res.status(200).json(result);
+});
+exports.getReviewQueue = (0, catchAsync_1.catchAsync)(async (req, res) => {
+    const userId = req.user.id;
+    const result = await vocabService.getReviewQueue(userId);
+    res.status(200).json(result);
+});
+exports.reviewVocab = (0, catchAsync_1.catchAsync)(async (req, res) => {
+    const userId = req.user.id;
+    const vocabId = req.params.id;
+    const { rating } = req.body;
+    const result = await vocabService.reviewVocab(userId, vocabId, rating);
     res.status(200).json(result);
 });
